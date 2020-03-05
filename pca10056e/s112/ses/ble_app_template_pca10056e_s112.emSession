@@ -10,7 +10,7 @@
   <FrameBufferWindow bufferHeight="-1" addressSpace="" addressText="" bufferWidth="-1"/>
  </FrameBufferWindow>
  <Memory1>
-  <MemoryWindow addressSpace="" dataSize="1" autoEvaluate="0" viewMode="0" addressOrder="0" columnsText="" refreshPeriod="0" name="ble_app_template_pca10056e_s112" radix="16" sizeText="" addressText=""/>
+  <MemoryWindow addressSpace="" dataSize="1" autoEvaluate="0" viewMode="0" addressOrder="0" columnsText="" refreshPeriod="0" name="ble_app_template_pca10056e_s112" radix="16" sizeText="" addressText="&amp;init"/>
  </Memory1>
  <Memory2>
   <MemoryWindow addressSpace="" dataSize="1" autoEvaluate="0" viewMode="0" addressOrder="0" columnsText="" refreshPeriod="0" name="ble_app_template_pca10056e_s112" radix="16" sizeText="" addressText=""/>
@@ -25,7 +25,11 @@
   <ProjectSessionItem path="ble_app_template_pca10056e_s112"/>
   <ProjectSessionItem path="ble_app_template_pca10056e_s112;ble_app_template_pca10056e_s112"/>
   <ProjectSessionItem path="ble_app_template_pca10056e_s112;ble_app_template_pca10056e_s112;Application"/>
+  <ProjectSessionItem path="ble_app_template_pca10056e_s112;ble_app_template_pca10056e_s112;Application;ble_service"/>
+  <ProjectSessionItem path="ble_app_template_pca10056e_s112;ble_app_template_pca10056e_s112;Application;board_service"/>
+  <ProjectSessionItem path="ble_app_template_pca10056e_s112;ble_app_template_pca10056e_s112;Board Support"/>
   <ProjectSessionItem path="ble_app_template_pca10056e_s112;ble_app_template_pca10056e_s112;None"/>
+  <ProjectSessionItem path="ble_app_template_pca10056e_s112;ble_app_template_pca10056e_s112;nRF_BLE"/>
   <ProjectSessionItem path="ble_app_template_pca10056e_s112;ble_app_template_pca10056e_s112;nRF_Libraries"/>
  </Project>
  <Register1>
@@ -59,9 +63,8 @@
   <Watches active="0" update="Never"/>
  </Watch4>
  <Files>
-  <SessionOpenFile windowGroup="DockEditLeft" x="0" y="344" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../main.c" selected="0" top="317" codecName="Default"/>
-  <SessionOpenFile windowGroup="DockEditLeft" x="0" y="122" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../ble_ars.h" selected="0" top="90" codecName="Default"/>
-  <SessionOpenFile windowGroup="DockEditLeft" x="0" y="75" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../ble_ars.c" selected="1" top="48" codecName="Default"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="0" y="139" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../src/main.c" selected="1" top="124" codecName="Default"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="26" y="7048" useTextEdit="1" useBinaryEdit="0" left="0" path="../config/sdk_config.h" selected="0" top="7010" codecName="Default"/>
  </Files>
- <ARMCrossStudioWindow activeProject="ble_app_template_pca10056e_s112" fileDialogDefaultFilter="*.c" autoConnectTarget="J-Link" buildConfiguration="Release" sessionSettings="" debugSearchFileMap="" fileDialogInitialDirectory="/home/hyperion/Downloads/nRF5/nRF5SDK16/projects/ble_peripheral/ble_app_assist" debugSearchPath="" autoConnectCapabilities="3199"/>
+ <ARMCrossStudioWindow activeProject="ble_app_template_pca10056e_s112" fileDialogDefaultFilter="*.c" autoConnectTarget="J-Link" buildConfiguration="Release" sessionSettings="" debugSearchFileMap="" fileDialogInitialDirectory="/home/hyperion/Downloads/nRF5/nRF5SDK16/projects/ble_peripheral/ble_app_assist" debugSearchPath="" autoConnectCapabilities="3711"/>
 </session>
