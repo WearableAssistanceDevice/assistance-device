@@ -66,11 +66,54 @@ static void application_timers_start(void)
 }
 
 
+
+
+static void constant_power_mode_enter(void)
+{
+    const ret_code_t err_code = sd_power_mode_set(NRF_POWER_MODE_CONSTLAT);
+    APP_ERROR_CHECK(err_code);
+}
+
+
+static void low_power_mode_enter(void)
+{
+    const ret_code_t err_code = sd_power_mode_set(NRF_POWER_MODE_LOWPWR);
+    APP_ERROR_CHECK(err_code);
+}
+
+
+/**@brief Function for putting the chip into sleep mode.
+ *
+ * @note This function will not return.
+ */
+static void sleep_mode_enter(void)
+{
+    ret_code_t err_code;
+
+    err_code = bsp_indication_set(BSP_INDICATE_IDLE);
+    APP_ERROR_CHECK(err_code);
+
+    // Prepare wakeup buttons.
+    err_code = bsp_btn_ble_sleep_mode_prepare();
+    APP_ERROR_CHECK(err_code);
+
+    // Go to system-off mode (this function will not return; wakeup will cause a reset).
+    err_code = sd_power_system_off();
+    APP_ERROR_CHECK(err_code);
+}
+
+
 /**@brief User function for handling events from the BSP module.
  *
  * @param[in]   event   Event generated when button is pressed.
  */
 void bsp_event_handler(bsp_event_t event) {
+    switch (event) {
+        case BSP_EVENT_SLEEP:
+            sleep_mode_enter();
+            break;
+    }
+
     ble_bsp_evt_handler(event);
     ble_assist_bsp_evt_handler(event);
 }
@@ -144,7 +187,7 @@ int main(void)
     NRF_LOG_INFO("Template example started.");
     application_timers_start();
 
-    advertising_start(erase_bonds);
+    advertising_start();
 
     // Enter main loop
     for (;;) {
