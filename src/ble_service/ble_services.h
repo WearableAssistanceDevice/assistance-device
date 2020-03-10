@@ -23,6 +23,8 @@ typedef struct {
     ble_evt_handler_t        ble_evt_handler;
     ble_service_init_func_t* service_init_funcs;
     unsigned int             service_init_func_count;
+    ble_uuid_t*              adv_uuids;
+    unsigned int             adv_uuid_count;
 } ble_services_init_t;
 
 
@@ -31,7 +33,7 @@ typedef struct {
  *
  * @param[in] p_init  BLE service initialization config.
  */
-void ble_services_init(ble_services_init_t* p_init);
+void ble_services_init(const ble_services_init_t* p_init);
 
 
 /**@brief Function for starting BLE advertising.

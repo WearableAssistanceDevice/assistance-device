@@ -1,6 +1,6 @@
 <!DOCTYPE CrossStudio_Project_File>
-<solution Name="ble_app_template_pca10059_s140" target="8" version="2">
-  <project Name="ble_app_template_pca10059_s140">
+<solution Name="assistance_device_pca10059_s140" target="8" version="2">
+  <project Name="assistance_device_pca10059_s140">
     <configuration
       Name="Common"
       arm_architecture="v7EM"

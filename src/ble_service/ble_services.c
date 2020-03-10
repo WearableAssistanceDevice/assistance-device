@@ -23,8 +23,6 @@
 #include "nrf_log_ctrl.h"
 #include "nrf_log_default_backends.h"
 
-#include "ble_ars/ble_ars.h"
-
 
 NRF_BLE_GATT_DEF(m_gatt);              /**< GATT module instance. */
 NRF_BLE_QWR_DEF(m_qwr);                /**< Context for the Queued Write module.*/
@@ -39,13 +37,6 @@ static struct {
 
 
 static uint16_t m_conn_handle = BLE_CONN_HANDLE_INVALID;                        /**< Handle of the current connection. */
-
-// YOUR_JOB: Use UUIDs for service(s) used in your application.
-static ble_uuid_t m_adv_uuids[] =                                               /**< Universally unique service identifiers. */
-{
-    {ARS_UUID_SERVICE, BLE_UUID_TYPE_VENDOR_BEGIN}
-    //{BLE_UUID_DEVICE_INFORMATION_SERVICE, BLE_UUID_TYPE_BLE}
-};
 
 
 /**@brief Function for handling BLE-related BSP events.
@@ -396,7 +387,7 @@ static void delete_bonds(void)
 
 /**@brief Function for initializing the Advertising functionality.
  */
-static void advertising_init(void)
+static void advertising_init(const ble_services_init_t* p_init)
 {
     ret_code_t             err_code;
     ble_advertising_init_t init;
@@ -406,8 +397,8 @@ static void advertising_init(void)
     init.advdata.name_type               = BLE_ADVDATA_FULL_NAME;
     init.advdata.include_appearance      = true;
     init.advdata.flags                   = BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE;
-    init.advdata.uuids_complete.uuid_cnt = sizeof(m_adv_uuids) / sizeof(m_adv_uuids[0]);
-    init.advdata.uuids_complete.p_uuids  = m_adv_uuids;
+    init.advdata.uuids_complete.uuid_cnt = p_init->adv_uuid_count;
+    init.advdata.uuids_complete.p_uuids  = p_init->adv_uuids;;
 
     /*
     ble_advdata_manuf_data_t m_manuf_adv_assistance_data;
@@ -452,7 +443,7 @@ void advertising_start(bool erase_bonds)
  *
  * @param[in] p_init  BLE service initialization config.
  */
-void ble_services_init(ble_services_init_t* p_init) {
+void ble_services_init(const ble_services_init_t* p_init) {
     if (p_init == NULL) {
         return;
     }
@@ -469,7 +460,7 @@ void ble_services_init(ble_services_init_t* p_init) {
         p_init->service_init_funcs[i]();
     }
 
-    advertising_init();
+    advertising_init(p_init);
     conn_params_init();
     peer_manager_init();
 }

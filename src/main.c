@@ -12,13 +12,18 @@
 #include "nrf_log.h"
 #include "nrf_log_ctrl.h"
 #include "nrf_log_default_backends.h"
+#include "bsp_btn_ble.h"
 
 #include "board_service/board_services.h"
 #include "ble_service/ble_services.h"
 #include "ble_service/ble_assist_service.h"
 
-
-#define DEAD_BEEF 0xDEADBEEF  /**< Value used as error code on stack dump, can be used to identify stack location on stack unwind. */
+#include "ble_ars/ble_ars.h"
+static ble_uuid_t m_adv_uuids[] =                                               /**< Universally unique service identifiers. */
+{
+    {ARS_UUID_SERVICE, BLE_UUID_TYPE_VENDOR_BEGIN}
+    //{BLE_UUID_DEVICE_INFORMATION_SERVICE, BLE_UUID_TYPE_BLE}
+};
 
 
 /**@brief Callback function for asserts in the SoftDevice.
@@ -34,7 +39,7 @@
  */
 void assert_nrf_callback(uint16_t line_num, const uint8_t * p_file_name)
 {
-    app_error_handler(DEAD_BEEF, line_num, p_file_name);
+    app_error_handler(0xDEADBEEF, line_num, p_file_name);
 }
 
 
@@ -177,6 +182,8 @@ int main(void)
     ble_init.ble_evt_handler = ble_evt_handler;
     ble_init.service_init_funcs = init_funcs;
     ble_init.service_init_func_count = sizeof(init_funcs) / sizeof(init_funcs[0]);
+    ble_init.adv_uuids = m_adv_uuids;
+    ble_init.adv_uuid_count = sizeof(m_adv_uuids) / sizeof(m_adv_uuids[0]);
 
     // Initialize
     board_services_init(&board_init);
