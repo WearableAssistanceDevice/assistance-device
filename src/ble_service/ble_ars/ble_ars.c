@@ -17,7 +17,6 @@
  * @return      NRF_SUCCESS on success, otherwise an error code.
  */
 static uint32_t assistance_request_char_add(ble_ars_t* p_ars, const ble_ars_init_t* p_ars_init) {
-    uint32_t            err_code;
     ble_gatts_char_md_t char_md;
     ble_gatts_attr_md_t cccd_md;
     ble_gatts_attr_t    attr_char_value;
@@ -59,15 +58,10 @@ static uint32_t assistance_request_char_add(ble_ars_t* p_ars, const ble_ars_init
     attr_char_value.max_len   = sizeof(uint8_t);
     attr_char_value.p_value   = &p_ars_init->initial_assist_req_value;
 
-    err_code = sd_ble_gatts_characteristic_add(p_ars->service_handle,
-                                               &char_md,
-                                               &attr_char_value,
-                                               &p_ars->assist_req_handles);
-    if (err_code != NRF_SUCCESS) {
-        return err_code;
-    }
-
-    return NRF_SUCCESS;
+    return sd_ble_gatts_characteristic_add(p_ars->service_handle,
+                                           &char_md,
+                                           &attr_char_value,
+                                           &p_ars->assist_req_handles);
 }
 
 
@@ -127,7 +121,7 @@ uint32_t ble_ars_assist_req_set(ble_ars_t* p_ars, uint8_t assist_req_value) {
     }
 
     // Send value if connected and notifying
-    if ((p_ars->conn_handle != BLE_CONN_HANDLE_INVALID)) {
+    if (p_ars->conn_handle != BLE_CONN_HANDLE_INVALID) {
         ble_gatts_hvx_params_t hvx_params;
 
         memset(&hvx_params, 0, sizeof(hvx_params));
@@ -140,17 +134,14 @@ uint32_t ble_ars_assist_req_set(ble_ars_t* p_ars, uint8_t assist_req_value) {
 
         err_code = sd_ble_gatts_hvx(p_ars->conn_handle, &hvx_params);
     }
-    else {
-        err_code = NRF_ERROR_INVALID_STATE;
-    }
-
+/*
     // Send write signal
     if (p_ars->evt_handler != NULL) {
         ble_ars_evt_t evt;
         evt.evt_type = BLE_ARS_EVT_WRITE;
         p_ars->evt_handler(p_ars, &evt);
     }
-  
+*/
     return err_code;
 }
 

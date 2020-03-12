@@ -1,5 +1,6 @@
 #include "ble_services.h"
-#include "ble_config.h"
+
+#include "config.h"
 
 #include "nrf.h"
 #include "nrf_sdh.h"
@@ -7,6 +8,7 @@
 #include "nrf_sdh_ble.h"
 #include "nrf_ble_gatt.h"
 #include "nrf_ble_qwr.h"
+#include "nrf_ble_scan.h"
 
 #include "ble.h"
 #include "ble_hci.h"
@@ -15,237 +17,24 @@
 #include "ble_advertising.h"
 #include "ble_conn_params.h"
 #include "ble_conn_state.h"
-
-#include "peer_manager.h"
-#include "peer_manager_handler.h"
+#include "ble_db_discovery.h"
+#include "nrf_ble_gatt.h"
 
 #include "nrf_log.h"
 #include "nrf_log_ctrl.h"
 #include "nrf_log_default_backends.h"
 
 
-NRF_BLE_GATT_DEF(m_gatt);              /**< GATT module instance. */
-NRF_BLE_QWR_DEF(m_qwr);                /**< Context for the Queued Write module.*/
-BLE_ADVERTISING_DEF(m_advertising);    /**< Advertising module instance. */
-
-
-// BLE services config storage
 static struct {
-    ble_adv_evt_handler_t adv_evt_handler;
-    ble_evt_handler_t     ble_evt_handler;
+    nrf_ble_scan_t*            p_ble_scan;
+    nrf_ble_gatt_t*            p_ble_gatt;
+    ble_db_discovery_t*        p_ble_db_discovery;
+    nrf_ble_gq_t*              p_ble_qatt_queue;
+
+    ble_scan_evt_handler_t     scan_evt_handler;
+    ble_evt_handler_t          ble_evt_handler;
+    db_discovery_evt_handler_t db_disc_evt_handler;
 } ble_services_config;
-
-
-static uint16_t m_conn_handle = BLE_CONN_HANDLE_INVALID;                        /**< Handle of the current connection. */
-
-
-/**@brief Function for handling BLE-related BSP events.
- *
- * @param[in] event  BSP event.
- */
-void ble_bsp_evt_handler(bsp_event_t event) {
-    ret_code_t err_code;
-
-    switch (event)
-    {
-        case BSP_EVENT_DISCONNECT:
-            err_code = sd_ble_gap_disconnect(m_conn_handle,
-                                             BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
-            if (err_code != NRF_ERROR_INVALID_STATE)
-            {
-                APP_ERROR_CHECK(err_code);
-            }
-            break; // BSP_EVENT_DISCONNECT
-
-        case BSP_EVENT_WHITELIST_OFF:
-            if (m_conn_handle == BLE_CONN_HANDLE_INVALID)
-            {
-                err_code = ble_advertising_restart_without_whitelist(&m_advertising);
-                if (err_code != NRF_ERROR_INVALID_STATE)
-                {
-                    APP_ERROR_CHECK(err_code);
-                }
-            }
-            break; // BSP_EVENT_KEY_0
-
-        default:
-            break;
-    }
-}
-
-
-/**@brief Function for handling Peer Manager events.
- *
- * @param[in] p_evt  Peer Manager event.
- */
-static void pm_evt_handler(pm_evt_t const * p_evt)
-{
-    pm_handler_on_pm_evt(p_evt);
-    pm_handler_flash_clean(p_evt);
-
-    switch (p_evt->evt_id)
-    {
-        case PM_EVT_PEERS_DELETE_SUCCEEDED:
-            advertising_start(false);
-            break;
-
-        default:
-            break;
-    }
-}
-
-
-/**@brief Function for the GAP initialization.
- *
- * @details This function sets up all the necessary GAP (Generic Access Profile) parameters of the
- *          device including the device name, appearance, and the preferred connection parameters.
- */
-static void gap_params_init(void)
-{
-    ret_code_t              err_code;
-    ble_gap_conn_params_t   gap_conn_params;
-    ble_gap_conn_sec_mode_t sec_mode;
-
-    BLE_GAP_CONN_SEC_MODE_SET_OPEN(&sec_mode);
-
-    err_code = sd_ble_gap_device_name_set(&sec_mode,
-                                          (const uint8_t *)DEVICE_NAME,
-                                          strlen(DEVICE_NAME));
-    APP_ERROR_CHECK(err_code);
-
-    /* YOUR_JOB: Use an appearance value matching the application's use case.
-       err_code = sd_ble_gap_appearance_set(BLE_APPEARANCE_);
-       APP_ERROR_CHECK(err_code); */
-
-    memset(&gap_conn_params, 0, sizeof(gap_conn_params));
-
-    gap_conn_params.min_conn_interval = MIN_CONN_INTERVAL;
-    gap_conn_params.max_conn_interval = MAX_CONN_INTERVAL;
-    gap_conn_params.slave_latency     = SLAVE_LATENCY;
-    gap_conn_params.conn_sup_timeout  = CONN_SUP_TIMEOUT;
-
-    err_code = sd_ble_gap_ppcp_set(&gap_conn_params);
-    APP_ERROR_CHECK(err_code);
-}
-
-
-/**@brief Function for initializing the GATT module.
- */
-static void gatt_init(void)
-{
-    ret_code_t err_code = nrf_ble_gatt_init(&m_gatt, NULL);
-    APP_ERROR_CHECK(err_code);
-}
-
-
-/**@brief Function for handling Queued Write Module errors.
- *
- * @details A pointer to this function will be passed to each service which may need to inform the
- *          application about an error.
- *
- * @param[in]   nrf_error   Error code containing information about what went wrong.
- */
-static void nrf_qwr_error_handler(uint32_t nrf_error)
-{
-    APP_ERROR_HANDLER(nrf_error);
-}
-
-
-/**@brief Function for initializing services that will be used by the application.
- */
-static void services_init(void)
-{
-    ret_code_t         err_code;
- 
-    // Initialize Queued Write Module
-    nrf_ble_qwr_init_t qwr_init = {0};
-    qwr_init.error_handler = nrf_qwr_error_handler;
-    err_code = nrf_ble_qwr_init(&m_qwr, &qwr_init);
-    APP_ERROR_CHECK(err_code);
-}
-
-
-/**@brief Function for handling the Connection Parameters Module.
- *
- * @details This function will be called for all events in the Connection Parameters Module which
- *          are passed to the application.
- *          @note All this function does is to disconnect. This could have been done by simply
- *                setting the disconnect_on_fail config parameter, but instead we use the event
- *                handler mechanism to demonstrate its use.
- *
- * @param[in] p_evt  Event received from the Connection Parameters Module.
- */
-static void on_conn_params_evt(ble_conn_params_evt_t * p_evt)
-{
-    ret_code_t err_code;
-
-    if (p_evt->evt_type == BLE_CONN_PARAMS_EVT_FAILED)
-    {
-        err_code = sd_ble_gap_disconnect(m_conn_handle, BLE_HCI_CONN_INTERVAL_UNACCEPTABLE);
-        APP_ERROR_CHECK(err_code);
-    }
-}
-
-
-/**@brief Function for handling a Connection Parameters error.
- *
- * @param[in] nrf_error  Error code containing information about what went wrong.
- */
-static void conn_params_error_handler(uint32_t nrf_error)
-{
-    APP_ERROR_HANDLER(nrf_error);
-}
-
-
-/**@brief Function for initializing the Connection Parameters module.
- */
-static void conn_params_init(void)
-{
-    ret_code_t             err_code;
-    ble_conn_params_init_t cp_init;
-
-    memset(&cp_init, 0, sizeof(cp_init));
-
-    cp_init.p_conn_params                  = NULL;
-    cp_init.first_conn_params_update_delay  = FIRST_CONN_PARAMS_UPDATE_DELAY;
-    cp_init.next_conn_params_update_delay  = NEXT_CONN_PARAMS_UPDATE_DELAY;
-    cp_init.max_conn_params_update_count   = MAX_CONN_PARAMS_UPDATE_COUNT;
-    cp_init.start_on_notify_cccd_handle    = BLE_GATT_HANDLE_INVALID;
-    cp_init.disconnect_on_fail             = false;
-    cp_init.evt_handler                    = on_conn_params_evt;
-    cp_init.error_handler                  = conn_params_error_handler;
-
-    err_code = ble_conn_params_init(&cp_init);
-    APP_ERROR_CHECK(err_code);
-}
-
-
-/**@brief Function for handling advertising events.
- *
- * @details This function will be called for advertising events which are passed to the application.
- *
- * @param[in] ble_adv_evt  Advertising event.
- */
-static void on_adv_evt(ble_adv_evt_t ble_adv_evt)
-{
-    ret_code_t err_code;
-
-    switch (ble_adv_evt)
-    {
-        case BLE_ADV_EVT_FAST:
-            NRF_LOG_INFO("Fast advertising.");
-            err_code = bsp_indication_set(BSP_INDICATE_ADVERTISING);
-            APP_ERROR_CHECK(err_code);
-            break;
-
-        default:
-            break;
-    }
-
-    if (ble_services_config.adv_evt_handler != NULL) {
-        ble_services_config.adv_evt_handler(ble_adv_evt);
-    }
-}
 
 
 /**@brief Function for handling BLE events.
@@ -253,25 +42,48 @@ static void on_adv_evt(ble_adv_evt_t ble_adv_evt)
  * @param[in]   p_ble_evt   Bluetooth stack event.
  * @param[in]   p_context   Unused.
  */
-static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
+static void ble_evt_handler(const ble_evt_t* p_ble_evt, void* p_context)
 {
-    ret_code_t err_code = NRF_SUCCESS;
+    ret_code_t err_code;
+
+    // For readability.
+    const ble_gap_evt_t* p_gap_evt = &p_ble_evt->evt.gap_evt;
 
     switch (p_ble_evt->header.evt_id)
     {
-        case BLE_GAP_EVT_DISCONNECTED:
-            NRF_LOG_INFO("Disconnected.");
-            // LED indication will be changed when advertising starts.
-            break;
-
+        // Upon connection, check which peripheral has connected (HR or RSC), initiate DB
+        // discovery, update LEDs status and resume scanning if necessary. */
         case BLE_GAP_EVT_CONNECTED:
-            NRF_LOG_INFO("Connected.");
-            err_code = bsp_indication_set(BSP_INDICATE_CONNECTED);
+        {
+            const uint8_t* addr = p_ble_evt->evt.gap_evt.params.connected.peer_addr.addr;
+            NRF_LOG_INFO("Connected to %02x:%02x:%02x:%02x:%02x:%02x", addr[0], addr[1], addr[2], addr[3], addr[4], addr[5]);
+
+            err_code = ble_db_discovery_start(ble_services_config.p_ble_db_discovery, p_gap_evt->conn_handle);
+            //APP_ERROR_CHECK(err_code);
+        } break;
+
+        // Upon disconnection, reset the connection handle of the peer which disconnected, and update the LEDs status.
+        case BLE_GAP_EVT_DISCONNECTED:
+        {
+            NRF_LOG_INFO("Disconnected.");
+        } break;
+
+        case BLE_GAP_EVT_TIMEOUT:
+        {
+            // We have not specified a timeout for scanning, so only connection attemps can timeout.
+            if (p_gap_evt->params.timeout.src == BLE_GAP_TIMEOUT_SRC_CONN)
+            {
+                NRF_LOG_DEBUG("Connection request timed out.");
+            }
+        } break;
+
+        case BLE_GAP_EVT_CONN_PARAM_UPDATE_REQUEST:
+        {
+            // Accept parameters requested by peer.
+            err_code = sd_ble_gap_conn_param_update(p_gap_evt->conn_handle,
+                                                    &p_gap_evt->params.conn_param_update_request.conn_params);
             APP_ERROR_CHECK(err_code);
-            m_conn_handle = p_ble_evt->evt.gap_evt.conn_handle;
-            err_code = nrf_ble_qwr_conn_handle_assign(&m_qwr, m_conn_handle);
-            APP_ERROR_CHECK(err_code);
-            break;
+        } break;
 
         case BLE_GAP_EVT_PHY_UPDATE_REQUEST:
         {
@@ -286,20 +98,22 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
         } break;
 
         case BLE_GATTC_EVT_TIMEOUT:
+        {
             // Disconnect on GATT Client timeout event.
             NRF_LOG_DEBUG("GATT Client Timeout.");
             err_code = sd_ble_gap_disconnect(p_ble_evt->evt.gattc_evt.conn_handle,
                                              BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
             APP_ERROR_CHECK(err_code);
-            break;
+        } break;
 
         case BLE_GATTS_EVT_TIMEOUT:
+        {
             // Disconnect on GATT Server timeout event.
             NRF_LOG_DEBUG("GATT Server Timeout.");
             err_code = sd_ble_gap_disconnect(p_ble_evt->evt.gatts_evt.conn_handle,
                                              BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
             APP_ERROR_CHECK(err_code);
-            break;
+        } break;
 
         default:
             // No implementation needed.
@@ -314,7 +128,7 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
 
 /**@brief Function for initializing the BLE stack.
  *
- * @details Initializes the SoftDevice and the BLE event interrupt.
+ * @details Initializes the SoftDevice and the BLE event interrupts.
  */
 static void ble_stack_init(void)
 {
@@ -338,129 +152,120 @@ static void ble_stack_init(void)
 }
 
 
-/**@brief Function for the Peer Manager initialization.
+/**@brief Function for handling database discovery events.
+ *
+ * @details This function is callback function to handle events from the database discovery module.
+ *          Depending on the UUIDs that are discovered, this function should forward the events
+ *          to their respective services.
+ *
+ * @param[in] p_event  Pointer to the database discovery event.
  */
-static void peer_manager_init(void)
+static void db_disc_handler(ble_db_discovery_evt_t* p_evt)
 {
-    ble_gap_sec_params_t sec_param;
-    ret_code_t           err_code;
+    if (ble_services_config.db_disc_evt_handler != NULL) {
+        ble_services_config.db_disc_evt_handler(p_evt);
+    }
+}
 
-    err_code = pm_init();
-    APP_ERROR_CHECK(err_code);
 
-    memset(&sec_param, 0, sizeof(ble_gap_sec_params_t));
+/**@brief Database discovery initialization.
+ */
+static void db_discovery_init(void)
+{
+    ble_db_discovery_init_t db_init;
 
-    // Security parameters to be used for all security procedures.
-    sec_param.bond           = SEC_PARAM_BOND;
-    sec_param.mitm           = SEC_PARAM_MITM;
-    sec_param.lesc           = SEC_PARAM_LESC;
-    sec_param.keypress       = SEC_PARAM_KEYPRESS;
-    sec_param.io_caps        = SEC_PARAM_IO_CAPABILITIES;
-    sec_param.oob            = SEC_PARAM_OOB;
-    sec_param.min_key_size   = SEC_PARAM_MIN_KEY_SIZE;
-    sec_param.max_key_size   = SEC_PARAM_MAX_KEY_SIZE;
-    sec_param.kdist_own.enc  = 1;
-    sec_param.kdist_own.id   = 1;
-    sec_param.kdist_peer.enc = 1;
-    sec_param.kdist_peer.id  = 1;
+    memset(&db_init, 0, sizeof(db_init));
 
-    err_code = pm_sec_params_set(&sec_param);
-    APP_ERROR_CHECK(err_code);
+    db_init.evt_handler  = db_disc_handler;
+    db_init.p_gatt_queue = ble_services_config.p_ble_qatt_queue;
 
-    err_code = pm_register(pm_evt_handler);
+    ret_code_t err_code = ble_db_discovery_init(&db_init);
     APP_ERROR_CHECK(err_code);
 }
 
 
-/**@brief Clear bond information from persistent storage.
+/**@brief Function for handling Scaning events.
+ *
+ * @param[in]   p_scan_evt   Scanning event.
  */
-static void delete_bonds(void)
+static void scan_evt_handler(const scan_evt_t* p_scan_evt)
 {
     ret_code_t err_code;
 
-    NRF_LOG_INFO("Erase bonds!");
-
-    err_code = pm_peers_delete();
-    APP_ERROR_CHECK(err_code);
-}
-
-
-/**@brief Function for initializing the Advertising functionality.
- */
-static void advertising_init(const ble_services_init_t* p_init)
-{
-    ret_code_t             err_code;
-    ble_advertising_init_t init;
-
-    memset(&init, 0, sizeof(init));
-
-    init.advdata.name_type               = BLE_ADVDATA_FULL_NAME;
-    init.advdata.include_appearance      = true;
-    init.advdata.flags                   = BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE;
-    init.advdata.uuids_complete.uuid_cnt = p_init->adv_uuid_count;
-    init.advdata.uuids_complete.p_uuids  = p_init->adv_uuids;;
-
-    /*
-    ble_advdata_manuf_data_t m_manuf_adv_assistance_data;
-    m_manuf_adv_assistance_data.company_identifier = COMPANY_UUID;
-    m_manuf_adv_assistance_data.data.p_data = m_assistance_adv_data;
-    m_manuf_adv_assistance_data.data.size = sizeof(m_assistance_adv_data) / sizeof(m_assistance_adv_data[0]);
-    init.advdata.p_manuf_specific_data = &m_manuf_assistance_data;
-    */
-
-    init.config.ble_adv_fast_enabled  = true;
-    init.config.ble_adv_fast_interval = APP_ADV_INTERVAL;
-    init.config.ble_adv_fast_timeout  = APP_ADV_DURATION;
-
-    init.evt_handler = on_adv_evt;
-
-    err_code = ble_advertising_init(&m_advertising, &init);
-    APP_ERROR_CHECK(err_code);
-
-    ble_advertising_conn_cfg_tag_set(&m_advertising, APP_BLE_CONN_CFG_TAG);
-}
-
-
-/**@brief Function for starting advertising.
- */
-void advertising_start(bool erase_bonds)
-{
-    if (erase_bonds == true)
+    switch(p_scan_evt->scan_evt_id)
     {
-        delete_bonds();
-        // Advertising is started by PM_EVT_PEERS_DELETED_SUCEEDED event
+        case NRF_BLE_SCAN_EVT_CONNECTING_ERROR:
+            err_code = p_scan_evt->params.connecting_err.err_code;
+            APP_ERROR_CHECK(err_code);
+            break;
+
+        default:
+            break;
     }
-    else
-    {
-        ret_code_t err_code = ble_advertising_start(&m_advertising, BLE_ADV_MODE_FAST);
 
-        APP_ERROR_CHECK(err_code);
+    if (ble_services_config.scan_evt_handler != NULL) {
+        ble_services_config.scan_evt_handler(p_scan_evt);
     }
 }
 
 
-/**@brief Function for initializing BLE services.
- *
- * @param[in] p_init  BLE service initialization config.
+static void scan_init(void)
+{
+    ret_code_t          err_code;
+    nrf_ble_scan_init_t init_scan;
+
+    memset(&init_scan, 0, sizeof(init_scan));
+
+    init_scan.connect_if_match = true;
+    init_scan.conn_cfg_tag     = APP_BLE_CONN_CFG_TAG;
+
+    err_code = nrf_ble_scan_init(ble_services_config.p_ble_scan, &init_scan, scan_evt_handler);
+    APP_ERROR_CHECK(err_code);
+}
+
+
+/**@brief Function for initializing the GATT module.
  */
+static void gatt_init(void)
+{
+    ret_code_t err_code = nrf_ble_gatt_init(ble_services_config.p_ble_gatt, NULL);
+    APP_ERROR_CHECK(err_code);
+}
+
+
 void ble_services_init(const ble_services_init_t* p_init) {
     if (p_init == NULL) {
+        APP_ERROR_CHECK(NRF_ERROR_NULL);
+        return;
+    }
+    if (p_init->p_ble_db_discovery == NULL ||
+        p_init->p_ble_gatt         == NULL ||
+        p_init->p_ble_qatt_queue   == NULL ||
+        p_init->p_ble_scan         == NULL) {
+        APP_ERROR_CHECK(NRF_ERROR_NULL);
         return;
     }
 
-    ble_services_config.adv_evt_handler = p_init->adv_evt_handler;
-    ble_services_config.ble_evt_handler = p_init->ble_evt_handler;
+    // Copy event handler function pointers
+    ble_services_config.p_ble_db_discovery  = p_init->p_ble_db_discovery;
+    ble_services_config.p_ble_gatt          = p_init->p_ble_gatt;
+    ble_services_config.p_ble_qatt_queue    = p_init->p_ble_qatt_queue;
+    ble_services_config.p_ble_scan          = p_init->p_ble_scan;
+    ble_services_config.ble_evt_handler     = p_init->ble_evt_handler;
+    ble_services_config.scan_evt_handler    = p_init->scan_evt_handler;
+    ble_services_config.db_disc_evt_handler = p_init->db_disc_evt_handler;
 
+    // Initialize core BLE services
     ble_stack_init();
-    gap_params_init();
+    scan_init();
     gatt_init();
+    db_discovery_init();
 
-    services_init();
-    for (unsigned int i = 0; i < p_init->service_init_func_count; ++i) {
-        p_init->service_init_funcs[i]();
+    // Initialize GATT server and client services
+    for (int i = 0; i < p_init->gatts_init_func_count; ++i) {
+        p_init->gatts_init_funcs[i]();
     }
-
-    advertising_init(p_init);
-    conn_params_init();
-    peer_manager_init();
+    for (int i = 0; i < p_init->gattc_init_func_count; ++i) {
+        p_init->gattc_init_funcs[i](p_init->p_ble_qatt_queue);
+    }
 }
