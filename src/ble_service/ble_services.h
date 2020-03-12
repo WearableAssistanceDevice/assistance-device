@@ -7,6 +7,11 @@
 #include "ble_db_discovery.h"
 
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+
 /**@brief Function for handling Scaning events.
  *
  * @param[in]   p_scan_evt   Scanning event.
@@ -64,3 +69,8 @@ typedef struct {
  * @param[in] p_init  BLE service initialization config.
  */
 void ble_services_init(const ble_services_init_t* p_init);
+
+
+#ifdef __cplusplus
+}
+#endif

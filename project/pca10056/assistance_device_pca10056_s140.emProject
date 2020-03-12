@@ -99,7 +99,6 @@
       <file file_name="../../src/config.h" />
       <file file_name="../../src/main.c" />
       <folder Name="ble_service">
-        <file file_name="../../src/ble_service/ble_assist_service.h" />
         <file file_name="../../src/ble_service/ble_services.c" />
         <file file_name="../../src/ble_service/ble_services.h" />
         <folder Name="ble_ars">
