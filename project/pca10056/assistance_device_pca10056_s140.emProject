@@ -105,6 +105,10 @@
           <file file_name="../../src/ble_service/ble_ars/ble_ars.c" />
           <file file_name="../../src/ble_service/ble_ars/ble_ars.h" />
         </folder>
+        <folder Name="ble_dls_c">
+          <file file_name="../../src/ble_service/ble_dls_c/ble_dls_c.c" />
+          <file file_name="../../src/ble_service/ble_dls_c/ble_dls_c.h" />
+        </folder>
       </folder>
       <file file_name="config/sdk_config.h" />
     </folder>

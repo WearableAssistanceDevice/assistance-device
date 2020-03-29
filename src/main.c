@@ -13,11 +13,12 @@
 #include "board_service/board_service.h"
 #include "ble_service/ble_services.h"
 #include "ble_service/ble_ars/ble_ars.h"
+#include "ble_service/ble_dls_c/ble_dls_c.h"
 
 #include "bsp.h"
 
 #include "ble.h"
-#include "ble_advertising.h"
+#include "ble_advertising.h"  
 #include "ble_db_discovery.h"
 
 #include "nrf_sdh_ble.h"
@@ -31,14 +32,15 @@
 #include "nrf_pwr_mgmt.h"
 
 
-NRF_BLE_SCAN_DEF(m_scan);                         /**< Scanning module instance. */
-NRF_BLE_GATT_DEF(m_gatt);                         /**< GATT module instance. */
-BLE_DB_DISCOVERY_DEF(m_db_disc);                  /**< DB discovery module instance. */
-NRF_BLE_GQ_DEF(m_ble_gatt_queue,                  /**< BLE GATT Queue instance. */
+NRF_BLE_SCAN_DEF(m_scan);                         /**< Scanning module instance */
+NRF_BLE_GATT_DEF(m_gatt);                         /**< GATT module instance */
+BLE_DB_DISCOVERY_DEF(m_db_disc);                  /**< DB discovery module instance */
+NRF_BLE_GQ_DEF(m_ble_gatt_queue,                  /**< BLE GATT Queue instance */
                NRF_SDH_BLE_CENTRAL_LINK_COUNT,
                NRF_BLE_GQ_QUEUE_SIZE);
 
-BLE_ARS_DEF(m_ble_ars);    /**< Assistance Request server module. */
+BLE_ARS_DEF(m_ble_ars);      /**< Assistance Request server module */
+BLE_DLS_C_DEF(m_ble_dls_c);  /**< Door Lock client module */
 
 
 static char const m_server_periph_name[] = SERVER_PERIPH_NAME;
@@ -59,6 +61,16 @@ static char const m_door_periph_name[] = DOOR_PERIPH_NAME;
 void assert_nrf_callback(uint16_t line_num, const uint8_t* p_file_name)
 {
     app_error_handler(0xDEADBEEF, line_num, p_file_name);
+}
+
+
+/**@brief Function for handling the Door Lock client errors.
+ *
+ * @param[in]   nrf_error   Error code containing information about what went wrong.
+ */
+static void dls_error_handler(uint32_t nrf_error)
+{
+    APP_ERROR_HANDLER(nrf_error);
 }
 
 
@@ -149,8 +161,44 @@ static void ars_evt_handler(ble_ars_t* p_ars, ble_ars_evt_t* p_ars_evt)
             break;
         }
 
-        default:
-            break;
+        default: break;
+    }
+}
+
+
+/**@brief Handles events coming from the Door Lock client module.
+ */
+static void dls_c_evt_handler(ble_dls_c_t* p_dls_c, ble_dls_c_evt_t* p_dls_c_evt)
+{
+    ret_code_t err_code;
+
+    switch (p_dls_c_evt->evt_type)
+    {
+        case BLE_DLS_C_EVT_DISCOVERY_COMPLETE:
+        {
+            // Assign handles
+            err_code = ble_dls_c_handles_assign(&m_ble_dls_c,
+                                                p_dls_c_evt->conn_handle,
+                                                &p_dls_c_evt->params.peer_db);
+            APP_ERROR_CHECK(err_code);
+            NRF_LOG_INFO("Door Lock service discovered on conn_handle 0x%x.", p_dls_c_evt->conn_handle);
+
+            // Door Lock service discovered. Enable notification of door lock state.
+            //err_code = ble_dls_c_lock_req_notif_enable(p_dls_c);
+            //APP_ERROR_CHECK(err_code);
+
+            // Send unlock request
+            err_code = ble_dls_c_lock_state_send(&m_ble_dls_c, 0);
+            APP_ERROR_CHECK(err_code);
+            NRF_LOG_INFO("Door unlock request sent");
+        } break; // BLE_DLS_C_EVT_DISCOVERY_COMPLETE
+
+        case BLE_DLS_C_EVT_LOCK_NOTIFICATION:
+        {
+            NRF_LOG_INFO("Door lock state changed on peer to 0x%x.", p_dls_c_evt->params.lock_state.state);
+        } break; // BLE_DLS_C_EVT_LOCK_NOTIFICATION
+
+        default: break;
     }
 }
 
@@ -193,12 +241,21 @@ static void bsp_event_handler(bsp_event_t event)
             APP_ERROR_CHECK(err_code);
 
             bsp_board_led_on(ASSISTANCE_REQUEST_LED);
-            server_scan_filters_enable();
 
             nrf_ble_scan_stop();
+            server_scan_filters_enable();
             scan_start();
 
             NRF_LOG_INFO("ARS initiate assistance request");
+        }
+        break;
+
+        case DOOR_UNLOCK_KEY_EVENT: {
+            nrf_ble_scan_stop();
+            door_scan_filters_enable();
+            scan_start();
+
+            NRF_LOG_INFO("DLS_C initiate door unlock request");
         }
         break;
 
@@ -254,6 +311,22 @@ static void ars_init(void)
 }
 
 
+/**@brief Door Lock client initialization.
+ */
+static void dls_c_init(nrf_ble_gq_t* p_gatt_queue)
+{
+    ret_code_t       err_code;
+    ble_dls_c_init_t dls_c_init_obj;
+
+    dls_c_init_obj.evt_handler   = dls_c_evt_handler;
+    dls_c_init_obj.p_gatt_queue  = p_gatt_queue;
+    dls_c_init_obj.error_handler = dls_error_handler;
+
+    err_code = ble_dls_c_init(&m_ble_dls_c, &dls_c_init_obj);
+    APP_ERROR_CHECK(err_code);
+}
+
+
 int main(void)
 {
     // Board services configuration
@@ -262,8 +335,12 @@ int main(void)
 
     // BLE services configuration
     ble_services_init_t ble_init = {0};
+
     ble_gatts_service_init_func_t gatts_init_funcs[] = {
         ars_init
+    };
+    ble_gattc_service_init_func_t gattc_init_funcs[] = {
+        dls_c_init
     };
 
     ble_init.p_ble_db_discovery  = &m_db_disc;
@@ -276,6 +353,9 @@ int main(void)
 
     ble_init.gatts_init_funcs      = gatts_init_funcs;
     ble_init.gatts_init_func_count = sizeof(gatts_init_funcs) / sizeof(gatts_init_funcs[0]);
+
+    ble_init.gattc_init_funcs      = gattc_init_funcs;
+    ble_init.gattc_init_func_count = sizeof(gattc_init_funcs) / sizeof(gattc_init_funcs[0]);
 
     // Initialize services
     board_services_init(&board_init);
