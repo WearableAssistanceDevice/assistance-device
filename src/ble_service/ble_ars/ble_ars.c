@@ -17,51 +17,34 @@
  * @return      NRF_SUCCESS on success, otherwise an error code.
  */
 static uint32_t assistance_request_char_add(ble_ars_t* p_ars, const ble_ars_init_t* p_ars_init) {
-    ble_gatts_char_md_t char_md;
-    ble_gatts_attr_md_t cccd_md;
-    ble_gatts_attr_t    attr_char_value;
-    ble_uuid_t          ble_uuid;
-    ble_gatts_attr_md_t attr_md;
+    ble_add_char_params_t char_params;
+    memset(&char_params, 0, sizeof(char_params));
 
-    memset(&cccd_md, 0, sizeof(cccd_md));
-    BLE_GAP_CONN_SEC_MODE_SET_OPEN(&cccd_md.read_perm);
-    BLE_GAP_CONN_SEC_MODE_SET_OPEN(&cccd_md.write_perm);
-    cccd_md.write_perm = p_ars_init->assist_req_char_attr_md.cccd_write_perm;
-    cccd_md.vloc       = BLE_GATTS_VLOC_STACK;
+    char_params.uuid                  = ARS_UUID_ASSIST_REQ_CHAR;
+    char_params.uuid_type             = p_ars->uuid_type;
+    char_params.max_len               = 1;
+    char_params.init_len              = 1;
+    char_params.p_init_value          = &p_ars_init->initial_assist_req_value;
+    char_params.is_var_len            = false;
+    char_params.is_defered_read       = false;
+    char_params.is_defered_write      = false;
+    char_params.read_access           = p_ars_init->assist_req_char_read_access;
+    char_params.write_access          = p_ars_init->assist_req_char_write_access;
+    char_params.cccd_write_access     = p_ars_init->assist_req_char_cccd_access;
+    char_params.is_value_user         = false;
+    char_params.p_user_descr          = NULL; //TODO?
+    char_params.p_presentation_format = NULL; //TODO?
+    
+    char_params.char_props.broadcast      = 0;
+    char_params.char_props.read           = 1;
+    char_params.char_props.write_wo_resp  = 1;
+    char_params.char_props.write          = 1;
+    char_params.char_props.notify         = 0;
+    char_params.char_props.indicate       = 0;
+    char_params.char_props.auth_signed_wr = 1;
+    //char_params.char_ext_props;
 
-    memset(&char_md, 0, sizeof(char_md));
-    char_md.char_props.read   = 1;
-    char_md.char_props.write  = 1;
-    char_md.char_props.notify = 1; 
-    char_md.p_char_user_desc  = NULL;
-    char_md.p_char_pf         = NULL;
-    char_md.p_user_desc_md    = NULL;
-    char_md.p_cccd_md         = &cccd_md; 
-    char_md.p_sccd_md         = NULL;
-		
-    memset(&attr_md, 0, sizeof(attr_md));
-    attr_md.read_perm  = p_ars_init->assist_req_char_attr_md.read_perm;
-    attr_md.write_perm = p_ars_init->assist_req_char_attr_md.write_perm;
-    attr_md.vloc       = BLE_GATTS_VLOC_STACK;
-    attr_md.rd_auth    = 0;
-    attr_md.wr_auth    = 0;
-    attr_md.vlen       = 0;
-
-    ble_uuid.type = p_ars->uuid_type;
-    ble_uuid.uuid = ARS_UUID_ASSIST_REQ_CHAR;
-
-    memset(&attr_char_value, 0, sizeof(attr_char_value));
-    attr_char_value.p_uuid    = &ble_uuid;
-    attr_char_value.p_attr_md = &attr_md;
-    attr_char_value.init_len  = sizeof(uint8_t);
-    attr_char_value.init_offs = 0;
-    attr_char_value.max_len   = sizeof(uint8_t);
-    attr_char_value.p_value   = &p_ars_init->initial_assist_req_value;
-
-    return sd_ble_gatts_characteristic_add(p_ars->service_handle,
-                                           &char_md,
-                                           &attr_char_value,
-                                           &p_ars->assist_req_handles);
+    return characteristic_add(p_ars->service_handle, &char_params, &p_ars->assist_req_handles);
 }
 
 

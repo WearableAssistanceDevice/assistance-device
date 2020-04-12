@@ -53,9 +53,11 @@ typedef void (*ble_ars_evt_handler_t)(ble_ars_t* p_ars, ble_ars_evt_t* p_evt);
 /**@brief Assistance Service init structure. This contains all options and data needed for
  *        initialization of the service.*/
 typedef struct {
-    ble_ars_evt_handler_t        evt_handler;               /**< Event handler to be called for handling events in the Assistance Service */
-    uint8_t                      initial_assist_req_value;  /**< Initial value for the assistance request */
-    ble_srv_cccd_security_mode_t assist_req_char_attr_md;   /**< Initial security level for Assistance characteristics attribute */
+    ble_ars_evt_handler_t        evt_handler;                   /**< Event handler to be called for handling events in the Assistance Service */
+    uint8_t                      initial_assist_req_value;      /**< Initial value for the assistance request */
+    security_req_t               assist_req_char_read_access;   /**< Security level for reading the Assistance Request characteristic */
+    security_req_t               assist_req_char_write_access;  /**< Security level for writing the Assistance characteristics */
+    security_req_t               assist_req_char_cccd_access;   /**< Security level for writing the Assistance characteristics's CCCD */
 } ble_ars_init_t;
 
 

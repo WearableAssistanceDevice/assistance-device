@@ -18,10 +18,12 @@
 #include "bsp.h"
 
 #include "ble.h"
-#include "ble_advertising.h"  
+#include "ble_advertising.h"
+#include "ble_conn_state.h"
 #include "ble_db_discovery.h"
 
 #include "nrf_sdh_ble.h"
+#include "nrf_ble_bms.h"
 #include "nrf_ble_gatt.h"
 #include "nrf_ble_gq.h"
 #include "nrf_ble_qwr.h"
@@ -31,11 +33,15 @@
 #include "nrf_log_ctrl.h"
 #include "nrf_pwr_mgmt.h"
 
+#include "peer_manager.h"
+
 
 NRF_BLE_SCAN_DEF(m_scan);                         /**< Scanning module instance */
 NRF_BLE_GATT_DEF(m_gatt);                         /**< GATT module instance */
+NRF_BLE_BMS_DEF(m_bms);                           /**< Bond Management Service module instance */
+NRF_BLE_QWR_DEF(m_qwr);                           /**< Queued Write module instance */
 BLE_DB_DISCOVERY_DEF(m_db_disc);                  /**< DB discovery module instance */
-NRF_BLE_GQ_DEF(m_ble_gatt_queue,                  /**< BLE GATT Queue instance */
+NRF_BLE_GQ_DEF(m_gatt_queue,                      /**< BLE GATT Queue instance */
                NRF_SDH_BLE_CENTRAL_LINK_COUNT,
                NRF_BLE_GQ_QUEUE_SIZE);
 
@@ -66,7 +72,7 @@ void assert_nrf_callback(uint16_t line_num, const uint8_t* p_file_name)
 
 /**@brief Function for handling the Door Lock client errors.
  *
- * @param[in]   nrf_error   Error code containing information about what went wrong.
+ * @param[in] nrf_error  Error code containing information about what went wrong.
  */
 static void dls_error_handler(uint32_t nrf_error)
 {
@@ -116,7 +122,7 @@ static void scan_start(void)
 }
 
 
-/**@brief Function to start scanning.
+/**@brief Function to stop scanning.
  */
 static void scan_stop(void)
 {
@@ -152,9 +158,11 @@ static void ars_evt_handler(ble_ars_t* p_ars, ble_ars_evt_t* p_ars_evt)
             err_code = ble_ars_assist_req_get(p_ars, &assist_requested);
             APP_ERROR_CHECK(err_code);
             if (assist_requested) {
+                NRF_LOG_INFO("Assistance request status set to 1");
                 bsp_board_led_on(ASSISTANCE_REQUEST_LED);
             }
             else {
+                NRF_LOG_INFO("Assistance request status set to 0");
                 bsp_board_led_off(ASSISTANCE_REQUEST_LED);
                 sd_ble_gap_disconnect(p_ars->conn_handle, BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
             }
@@ -188,9 +196,10 @@ static void dls_c_evt_handler(ble_dls_c_t* p_dls_c, ble_dls_c_evt_t* p_dls_c_evt
             //APP_ERROR_CHECK(err_code);
 
             // Send unlock request
+            NRF_LOG_INFO("Sending unlock request...");
             err_code = ble_dls_c_lock_state_send(&m_ble_dls_c, 0);
             APP_ERROR_CHECK(err_code);
-            NRF_LOG_INFO("Door unlock request sent");
+            NRF_LOG_INFO("Unlock request sent");
         } break; // BLE_DLS_C_EVT_DISCOVERY_COMPLETE
 
         case BLE_DLS_C_EVT_LOCK_NOTIFICATION:
@@ -205,14 +214,15 @@ static void dls_c_evt_handler(ble_dls_c_t* p_dls_c, ble_dls_c_evt_t* p_dls_c_evt
 
 /**@brief Function for handling BLE events.
  *
- * @param[in]   p_ble_evt   Bluetooth stack event.
- * @param[in]   p_context   Unused.
+ * @param[in] p_ble_evt  Bluetooth stack event.
+ * @param[in] p_context  Unused.
  */
 static void ble_evt_handler(const ble_evt_t* p_ble_evt, void* p_context)
 {
     const ble_gap_evt_t* p_gap_evt = &p_ble_evt->evt.gap_evt;
 
-    switch (p_ble_evt->header.evt_id) {
+    switch (p_ble_evt->header.evt_id)
+    {
         case BLE_GAP_EVT_CONNECTED: {
             bsp_board_led_off(CENTRAL_SCANNING_LED);
             bsp_board_led_on(CENTRAL_CONNECTED_LED);
@@ -234,9 +244,13 @@ static void ble_evt_handler(const ble_evt_t* p_ble_evt, void* p_context)
 static void bsp_event_handler(bsp_event_t event)
 {
     ret_code_t err_code;
+    ble_conn_state_conn_handle_list_t conn_handles;
 
-    switch (event) {
+    switch (event)
+    {
         case ASSIST_REQ_KEY_EVENT: {
+            NRF_LOG_INFO("ARS initiate assistance request");
+
             err_code = ble_ars_assist_req_set(&m_ble_ars, true);
             APP_ERROR_CHECK(err_code);
 
@@ -245,19 +259,27 @@ static void bsp_event_handler(bsp_event_t event)
             nrf_ble_scan_stop();
             server_scan_filters_enable();
             scan_start();
-
-            NRF_LOG_INFO("ARS initiate assistance request");
         }
         break;
 
         case DOOR_UNLOCK_KEY_EVENT: {
+            NRF_LOG_INFO("DLS_C initiate door unlock request");
+
             nrf_ble_scan_stop();
             door_scan_filters_enable();
             scan_start();
-
-            NRF_LOG_INFO("DLS_C initiate door unlock request");
         }
         break;
+
+        case BOND_KEY_EVENT: {
+            conn_handles = ble_conn_state_central_handles();
+            for (int i = 0; i < conn_handles.len; ++i) {
+                if (!ble_conn_state_encrypted(conn_handles.conn_handles[i])) {
+                    NRF_LOG_INFO("Bonding to device with connection handle %d", conn_handles.conn_handles[i]);
+                    pm_conn_secure(conn_handles.conn_handles[i], false);
+                }
+            }
+        } break;
 
         default: break;
     }
@@ -266,7 +288,7 @@ static void bsp_event_handler(bsp_event_t event)
 
 /**@brief Function for handling Scaning events.
  *
- * @param[in]   p_scan_evt   Scanning event.
+ * @param[in]  p_scan_evt  Scanning event.
  */
 static void scan_evt_handler(const scan_evt_t* p_scan_evt)
 {
@@ -299,12 +321,13 @@ static void idle_state_handle(void)
  */
 static void ars_init(void)
 {
-    ble_ars_init_t assist_init = {0};
+    ble_ars_init_t assist_init;
+    memset(&assist_init, 0, sizeof(assist_init));
     
-    assist_init.evt_handler = ars_evt_handler;
-    BLE_GAP_CONN_SEC_MODE_SET_OPEN(&assist_init.assist_req_char_attr_md.cccd_write_perm);
-    BLE_GAP_CONN_SEC_MODE_SET_OPEN(&assist_init.assist_req_char_attr_md.read_perm);
-    BLE_GAP_CONN_SEC_MODE_SET_OPEN(&assist_init.assist_req_char_attr_md.write_perm);
+    assist_init.evt_handler                  = ars_evt_handler;
+    assist_init.assist_req_char_read_access  = SEC_JUST_WORKS;
+    assist_init.assist_req_char_write_access = SEC_JUST_WORKS;
+    assist_init.assist_req_char_cccd_access  = SEC_JUST_WORKS;
 
     const ret_code_t err_code = ble_ars_init(&m_ble_ars, &assist_init);
     APP_ERROR_CHECK(err_code);
@@ -345,8 +368,10 @@ int main(void)
 
     ble_init.p_ble_db_discovery  = &m_db_disc;
     ble_init.p_ble_gatt          = &m_gatt;
-    ble_init.p_ble_qatt_queue    = &m_ble_gatt_queue;
+    ble_init.p_ble_bms           = &m_bms;
+    ble_init.p_ble_qatt_queue    = &m_gatt_queue;
     ble_init.p_ble_scan          = &m_scan;
+    ble_init.p_ble_qwr           = &m_qwr;
     ble_init.ble_evt_handler     = ble_evt_handler;
     ble_init.scan_evt_handler    = scan_evt_handler;
     ble_init.db_disc_evt_handler = db_disc_handler;
@@ -359,10 +384,13 @@ int main(void)
 
     // Initialize services
     board_services_init(&board_init);
+    NRF_LOG_INFO("Initalized board services");
+
     ble_services_init(&ble_init);
+    NRF_LOG_INFO("Initialized BLE services");
 
     // Start execution
-    NRF_LOG_INFO("Assitance Device started.");
+    NRF_LOG_INFO("Assitance Device started");
 
     // Enter main loop
     for (;;)

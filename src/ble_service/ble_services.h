@@ -2,9 +2,11 @@
 
 #include "bsp.h"
 #include "ble.h"
+#include "ble_db_discovery.h"
+#include "nrf_ble_bms.h"
 #include "nrf_ble_scan.h"
 #include "nrf_ble_gatt.h"
-#include "ble_db_discovery.h"
+#include "nrf_ble_qwr.h"
 
 
 #ifdef __cplusplus
@@ -47,10 +49,12 @@ typedef void (*ble_gattc_service_init_func_t)(nrf_ble_gq_t* p_gatt_queue);
 
 /**@brief BLE services init structure */
 typedef struct {
-    nrf_ble_scan_t*                 p_ble_scan;             /**< Pointer to the scanning module */
+    nrf_ble_bms_t*                  p_ble_bms;              /**< Pointer to the bond management module */
+    ble_db_discovery_t*             p_ble_db_discovery;     /**< Pointer to the database discovery module */
     nrf_ble_gatt_t*                 p_ble_gatt;             /**< Pointer to the GATT module */
     nrf_ble_gq_t*                   p_ble_qatt_queue;       /**< Pointer to the GATT queue module */
-    ble_db_discovery_t*             p_ble_db_discovery;     /**< Pointer to the database discovery module */
+    nrf_ble_qwr_t*                  p_ble_qwr;              /**< Pointer to the Queued Write module */
+    nrf_ble_scan_t*                 p_ble_scan;             /**< Pointer to the scanning module */
 
     ble_scan_evt_handler_t          scan_evt_handler;       /**< User event handler for scan events */
     ble_evt_handler_t               ble_evt_handler;        /**< User event handler for BLE events */
