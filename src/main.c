@@ -158,12 +158,12 @@ static void ars_evt_handler(ble_ars_t* p_ars, ble_ars_evt_t* p_ars_evt)
             err_code = ble_ars_assist_req_get(p_ars, &assist_requested);
             APP_ERROR_CHECK(err_code);
             if (assist_requested) {
-                NRF_LOG_INFO("Assistance request status set to 1");
-                bsp_board_led_on(ASSISTANCE_REQUEST_LED);
+                NRF_LOG_INFO("Assistance request status set to True");
+                //bsp_board_led_on(ASSISTANCE_REQUEST_LED);
             }
             else {
-                NRF_LOG_INFO("Assistance request status set to 0");
-                bsp_board_led_off(ASSISTANCE_REQUEST_LED);
+                NRF_LOG_INFO("Assistance request acknowledged. Disconnecting...");
+                //bsp_board_led_off(ASSISTANCE_REQUEST_LED);
                 sd_ble_gap_disconnect(p_ars->conn_handle, BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
             }
             break;
@@ -249,13 +249,14 @@ static void bsp_event_handler(bsp_event_t event)
     switch (event)
     {
         case ASSIST_REQ_KEY_EVENT: {
-            NRF_LOG_INFO("ARS initiate assistance request");
+            NRF_LOG_INFO("Assistance request button pressed. Initiating assistance request...");
 
             err_code = ble_ars_assist_req_set(&m_ble_ars, true);
             APP_ERROR_CHECK(err_code);
 
             bsp_board_led_on(ASSISTANCE_REQUEST_LED);
 
+            NRF_LOG_INFO("Connecting to assistance server...");
             nrf_ble_scan_stop();
             server_scan_filters_enable();
             scan_start();
@@ -263,8 +264,9 @@ static void bsp_event_handler(bsp_event_t event)
         break;
 
         case DOOR_UNLOCK_KEY_EVENT: {
-            NRF_LOG_INFO("DLS_C initiate door unlock request");
+            NRF_LOG_INFO("Door unlock button pressed. Initiating door unlock request...");
 
+            NRF_LOG_INFO("Connecting to door lock...");
             nrf_ble_scan_stop();
             door_scan_filters_enable();
             scan_start();
@@ -390,7 +392,7 @@ int main(void)
     NRF_LOG_INFO("Initialized BLE services");
 
     // Start execution
-    NRF_LOG_INFO("Assitance Device started");
+    NRF_LOG_INFO("Wearable Assitance Device started");
 
     // Enter main loop
     for (;;)
