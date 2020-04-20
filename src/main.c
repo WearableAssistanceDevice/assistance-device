@@ -304,7 +304,7 @@ static void scan_evt_handler(const scan_evt_t* p_scan_evt)
  */
 static void db_disc_handler(ble_db_discovery_evt_t* p_evt)
 {
-    return;
+    ble_dls_on_db_disc_evt(&m_ble_dls_c, p_evt);
 }
 
 
@@ -326,10 +326,11 @@ static void ars_init(void)
     ble_ars_init_t assist_init;
     memset(&assist_init, 0, sizeof(assist_init));
     
+    // TODO: Use SEC_JUST_WORKS or better
     assist_init.evt_handler                  = ars_evt_handler;
-    assist_init.assist_req_char_read_access  = SEC_JUST_WORKS;
-    assist_init.assist_req_char_write_access = SEC_JUST_WORKS;
-    assist_init.assist_req_char_cccd_access  = SEC_JUST_WORKS;
+    assist_init.assist_req_char_read_access  = SEC_OPEN;
+    assist_init.assist_req_char_write_access = SEC_OPEN;
+    assist_init.assist_req_char_cccd_access  = SEC_OPEN;
 
     const ret_code_t err_code = ble_ars_init(&m_ble_ars, &assist_init);
     APP_ERROR_CHECK(err_code);

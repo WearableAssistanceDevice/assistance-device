@@ -78,9 +78,6 @@ uint32_t ble_ars_init(ble_ars_t* p_ars, const ble_ars_init_t* p_ars_init) {
 }
 
 
-
-
-
 uint32_t ble_ars_assist_req_set(ble_ars_t* p_ars, uint8_t assist_req_value) {
     if (p_ars == NULL) {
         return NRF_ERROR_NULL;
@@ -128,6 +125,7 @@ uint32_t ble_ars_assist_req_set(ble_ars_t* p_ars, uint8_t assist_req_value) {
     return err_code;
 }
 
+
 uint32_t ble_ars_assist_req_get(ble_ars_t* p_ars, uint8_t* p_assist_req_value) {
     uint32_t err_code = NRF_SUCCESS;
     ble_gatts_value_t gatts_value;
@@ -162,6 +160,7 @@ static void on_connect(ble_ars_t* p_ars, const ble_evt_t* p_ble_evt) {
     }
 }
 
+
 /**@brief Function for handling the Disconnect event.
  *
  * @param[in]   p_ars    Assistance Service structure.
@@ -177,6 +176,7 @@ static void on_disconnect(ble_ars_t* p_ars, const ble_evt_t* p_ble_evt) {
         p_ars->evt_handler(p_ars, &evt);
     }
 }
+
 
 /**@brief Function for handling the Write event.
  *
@@ -213,6 +213,7 @@ static void on_write(ble_ars_t* p_ars, const ble_evt_t* p_ble_evt) {
         }
     }
 }
+
 
 void ble_ars_on_ble_evt(const ble_evt_t* p_ble_evt, void* p_context) {
     ble_ars_t* p_ars = (ble_ars_t*)p_context;
